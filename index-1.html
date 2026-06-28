@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradePhyle — Murphy Chart Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#080b10;--surface:#0e1219;--card:#131824;--card2:#171e2e;
+  --border:#1c2438;--border2:#243050;
+  --accent:#00e5b4;--accent2:#4f7eff;--warn:#ff6b35;--gold:#f5c542;
+  --text:#dde4f0;--muted:#5a6a8a;--muted2:#8898b8;
+  --green:#00e5b4;--red:#ff3f6c;
+}
+body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid var(--border);background:rgba(8,11,16,0.98);position:sticky;top:0;z-index:200;backdrop-filter:blur(16px);}
+.logo{font-size:20px;font-weight:700;letter-spacing:-0.5px;}.logo span{color:var(--accent);}
+.hbadge{font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 10px;border-radius:20px;background:rgba(0,229,180,0.1);color:var(--accent);border:1px solid rgba(0,229,180,0.2);}
+
+/* TICKER */
+.ticker{background:var(--surface);border-bottom:1px solid var(--border);padding:7px 0;overflow:hidden;}
+.ticker-inner{display:flex;gap:28px;animation:tick 30s linear infinite;white-space:nowrap;}
+@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.ti{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:10.5px;}
+.ti-n{color:var(--muted2);}.ti-v{color:var(--text);}.up{color:var(--green);}.dn{color:var(--red);}
+
+/* HERO */
+.hero{text-align:center;padding:32px 20px 22px;}
+.htag{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;padding:5px 14px;border:1px solid rgba(0,229,180,0.25);border-radius:20px;margin-bottom:14px;}
+.hero h1{font-size:clamp(20px,3.5vw,38px);font-weight:700;line-height:1.15;letter-spacing:-0.8px;margin-bottom:8px;}
+.hero h1 em{font-style:normal;background:linear-gradient(120deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero p{color:var(--muted2);font-size:13px;max-width:480px;margin:0 auto;}
+
+/* STEPS BAR */
+.steps-bar{display:flex;align-items:center;justify-content:center;gap:0;padding:18px 24px 0;max-width:700px;margin:0 auto;width:100%;}
+.step-item{display:flex;align-items:center;gap:8px;}
+.step-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:2px solid var(--border2);color:var(--muted);transition:all .3s;flex-shrink:0;}
+.step-circle.done{background:var(--accent);border-color:var(--accent);color:#000;}
+.step-circle.active{background:var(--accent2);border-color:var(--accent2);color:#fff;}
+.step-label{font-size:12px;color:var(--muted);white-space:nowrap;}
+.step-label.active{color:var(--accent2);font-weight:600;}
+.step-label.done{color:var(--accent);font-weight:600;}
+.step-line{width:40px;height:2px;background:var(--border2);margin:0 6px;flex-shrink:0;}
+.step-line.done{background:var(--accent);}
+
+/* MAIN */
+.main{flex:1;display:grid;grid-template-columns:420px 1fr;gap:18px;padding:18px 22px 36px;max-width:1300px;margin:0 auto;width:100%;}
+
+/* PANELS */
+.panel{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;}
+.ph{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--card2);}
+.phi{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;}
+.phi.b{background:rgba(79,126,255,0.15);}
+.ph-title{font-size:13px;font-weight:600;}
+.ph-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.pb{padding:18px;flex:1;display:flex;flex-direction:column;gap:12px;}
+
+/* ── STEP 1: PDF UPLOAD BOX ── */
+.pdf-upload-box{border:2px dashed var(--accent2);border-radius:14px;padding:24px 18px;text-align:center;cursor:pointer;transition:all .25s;position:relative;overflow:hidden;background:rgba(79,126,255,0.04);}
+.pdf-upload-box:hover{border-color:var(--accent);background:rgba(0,229,180,0.05);}
+.pdf-upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.pub-icon{font-size:36px;margin-bottom:10px;}
+.pub-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.pub-sub{font-size:12px;color:var(--muted2);line-height:1.5;}
+.pub-hint{margin-top:10px;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:rgba(79,126,255,0.1);border:1px solid rgba(79,126,255,0.25);border-radius:20px;font-size:11px;color:var(--accent2);font-family:'JetBrains Mono',monospace;}
+
+/* PDF LOADED STATE */
+.pdf-loaded{display:none;border:2px solid rgba(0,229,180,0.3);border-radius:14px;padding:14px 16px;background:rgba(0,229,180,0.05);}
+.pdf-loaded-top{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.pdf-loaded-icon{font-size:28px;}
+.pdf-loaded-info{flex:1;}
+.pdf-loaded-name{font-size:13px;font-weight:600;color:var(--accent);word-break:break-all;}
+.pdf-loaded-meta{font-size:11px;color:var(--muted2);margin-top:2px;}
+.pdf-change-btn{font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;position:relative;overflow:hidden;}
+.pdf-change-btn input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.pdf-change-btn:hover{color:var(--accent2);border-color:var(--accent2);}
+
+/* PDF PROGRESS */
+.pdf-prog{margin-top:8px;}
+.pdf-prog-row{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px;}
+.pdf-prog-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.pdf-prog-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:2px;transition:width .3s;width:0%;}
+
+/* DIVIDER */
+.step-divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px;}
+.step-divider::before,.step-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* ── STEP 2: CHART UPLOAD ── */
+.chart-upload-box{border:2px dashed var(--border2);border-radius:14px;padding:24px 16px;text-align:center;cursor:pointer;transition:all .25s;position:relative;overflow:hidden;opacity:.5;pointer-events:none;}
+.chart-upload-box.ready{opacity:1;pointer-events:all;border-color:var(--border2);}
+.chart-upload-box.ready:hover{border-color:var(--accent);background:rgba(0,229,180,0.04);}
+.chart-upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.cub-icon{font-size:30px;margin-bottom:8px;}
+.cub-title{font-size:14px;font-weight:600;margin-bottom:3px;}
+.cub-sub{font-size:11px;color:var(--muted);}
+.fmts{display:flex;gap:4px;justify-content:center;margin-top:8px;}
+.ft{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 6px;border-radius:4px;background:var(--surface);color:var(--muted);border:1px solid var(--border);}
+
+/* CHART PREVIEW */
+#prev-wrap{display:none;position:relative;}
+#prev-img{width:100%;border-radius:10px;max-height:200px;object-fit:cover;display:block;}
+.rm-btn{position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.75);border:none;border-radius:50%;width:26px;height:26px;color:#fff;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}
+.rm-btn:hover{background:var(--red);}
+
+/* ANALYZE BTN */
+.abtn{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:12px;color:#000;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s,transform .15s;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.2px;}
+.abtn:hover:not(:disabled){opacity:.9;transform:translateY(-1px);}
+.abtn:disabled{opacity:.3;cursor:not-allowed;transform:none;}
+
+/* LOADING */
+.loading{display:none;text-align:center;padding:20px;}
+.bars{display:flex;gap:4px;justify-content:center;align-items:flex-end;height:32px;margin-bottom:10px;}
+.bar{width:5px;background:var(--accent);border-radius:3px;animation:bonce 1.1s ease infinite;}
+.bar:nth-child(2){animation-delay:.15s}.bar:nth-child(3){animation-delay:.3s}.bar:nth-child(4){animation-delay:.45s}.bar:nth-child(5){animation-delay:.6s}
+@keyframes bonce{0%,100%{height:8px;opacity:.3}50%{height:28px;opacity:1}}
+.load-t strong{color:var(--accent);display:block;font-size:13px;margin-bottom:2px;}
+.load-t span{font-size:11px;color:var(--muted2);}
+
+/* RIGHT: RESULT */
+.empty-st{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:50px 20px;text-align:center;}
+.empty-ic{font-size:36px;margin-bottom:12px;opacity:.2;}
+.empty-tx{color:var(--muted);font-size:13px;line-height:1.8;}
+.empty-steps{margin-top:20px;text-align:left;display:inline-block;}
+.empty-step{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;color:var(--muted2);}
+.es-num{width:22px;height:22px;border-radius:50%;background:var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted);flex-shrink:0;}
+
+.res-top{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);background:rgba(0,229,180,0.04);}
+.res-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.res-lbl{font-size:12px;font-weight:600;color:var(--accent);}
+.res-sym{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted2);}
+.res-body{padding:16px 18px;overflow-y:auto;flex:1;}
+.res-body::-webkit-scrollbar{width:3px;}.res-body::-webkit-scrollbar-thumb{background:var(--border2);}
+
+/* ANALYSIS BLOCKS */
+.ablock{margin-bottom:12px;padding:12px 14px;background:var(--surface);border-radius:10px;border-left:3px solid var(--accent);animation:fadein .35s ease;}
+.ablock.warn{border-left-color:var(--warn);}.ablock.info{border-left-color:var(--accent2);}.ablock.gold{border-left-color:var(--gold);}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.ablock-title{font-size:10px;font-family:'JetBrains Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.ablock-body{font-size:13px;line-height:1.7;color:var(--text);}
+.ablock-body strong{color:var(--accent);font-weight:600;}
+.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:600;font-family:'JetBrains Mono',monospace;margin:2px;}
+.tag.bull{background:rgba(0,229,180,0.12);color:var(--green);border:1px solid rgba(0,229,180,0.2);}
+.tag.bear{background:rgba(255,63,108,0.12);color:var(--red);border:1px solid rgba(255,63,108,0.2);}
+.tag.neut{background:rgba(245,197,66,0.12);color:var(--gold);border:1px solid rgba(245,197,66,0.2);}
+
+/* MURPHY PAGE CARDS */
+.pms-wrap{margin-top:14px;}
+.pms-title{font-size:13px;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.pms-title::after{content:'';flex:1;height:1px;background:var(--border2);}
+.page-card{background:var(--card2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;animation:fadein .4s ease;}
+.pch{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;transition:background .15s;}
+.pch:hover{background:rgba(79,126,255,0.06);}
+.pg-num{min-width:42px;height:42px;background:linear-gradient(135deg,var(--accent2),var(--accent));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;line-height:1.2;text-align:center;}
+.pg-info{flex:1;}
+.pg-topic{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px;}
+.pg-reason{font-size:11px;color:var(--muted2);line-height:1.4;}
+.pg-learn{margin-top:3px;font-size:11px;color:var(--accent);}
+.pg-badge{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
+.pg-score{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 6px;border-radius:4px;}
+.pg-score.H{background:rgba(0,229,180,0.12);color:var(--green);border:1px solid rgba(0,229,180,0.2);}
+.pg-score.M{background:rgba(79,126,255,0.12);color:var(--accent2);border:1px solid rgba(79,126,255,0.2);}
+.pg-score.L{background:rgba(90,106,138,0.2);color:var(--muted2);border:1px solid var(--border);}
+.pg-ch{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);}
+.pg-arr{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:3px;transition:transform .2s;}
+.pg-arr.open{transform:rotate(180deg);}
+
+/* PAGE PREVIEW */
+.page-preview{display:none;border-top:1px solid var(--border);padding:12px;}
+.page-preview.show{display:block;}
+.pcw{background:#fff;border-radius:8px;overflow:hidden;margin-bottom:8px;box-shadow:0 2px 12px rgba(0,0,0,0.3);}
+.pcw canvas{width:100%;height:auto;display:block;}
+.pbook-lbl{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-align:center;margin-top:5px;}
+.no-prev{text-align:center;padding:20px;color:var(--muted);font-size:12px;line-height:1.6;}
+
+@media(max-width:860px){
+  .main{grid-template-columns:1fr;padding:14px 14px 30px;}
+  .steps-bar{padding:14px 16px 0;}
+  .step-line{width:20px;}
+  header{padding:12px 16px;}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">Trade<span>Phyle</span></div>
+  <div class="hbadge">MURPHY AI ANALYZER</div>
+</header>
+
+<!-- TICKER -->
+<div class="ticker"><div class="ticker-inner" id="ticker"></div></div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="htag">📗 John J. Murphy Edition</div>
+  <h1>Chart Upload Karo, <em>Murphy Se Seekho.</em></h1>
+  <p>Pehle Murphy ki PDF upload karo, phir chart — AI pattern dhundh ke <strong style="color:var(--accent2)">exact book page</strong> dikhayega with preview.</p>
+</div>
+
+<!-- STEPS INDICATOR -->
+<div class="steps-bar" id="steps-bar">
+  <div class="step-item">
+    <div class="step-circle active" id="sc1">1</div>
+    <div class="step-label active" id="sl1">Murphy PDF Upload</div>
+  </div>
+  <div class="step-line" id="sline1"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc2">2</div>
+    <div class="step-label" id="sl2">Chart Upload</div>
+  </div>
+  <div class="step-line" id="sline2"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc3">3</div>
+    <div class="step-label" id="sl3">Analyze</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="panel">
+    <div class="ph">
+      <div class="phi b">📋</div>
+      <div>
+        <div class="ph-title">Upload Steps</div>
+        <div class="ph-sub">Dono upload karo phir analyze karo</div>
+      </div>
+    </div>
+    <div class="pb">
+
+      <!-- ══ STEP 1: MURPHY PDF ══ -->
+      <div style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--accent2);letter-spacing:1px;font-weight:600;">STEP 1 — MURPHY PDF</div>
+
+      <!-- Upload Box (shown when no PDF) -->
+      <div class="pdf-upload-box" id="pdf-upload-box">
+        <input type="file" id="pdf-inp" accept="application/pdf">
+        <div class="pub-icon">📗</div>
+        <div class="pub-title">Murphy Ki PDF Yahan Upload Karo</div>
+        <div class="pub-sub">
+          "Technical Analysis of the Financial Markets"<br>
+          John J. Murphy — 596 pages
+        </div>
+        <div class="pub-hint">📂 Click karke PDF select karo</div>
+      </div>
+
+      <!-- Loaded State (shown after PDF uploaded) -->
+      <div class="pdf-loaded" id="pdf-loaded">
+        <div class="pdf-loaded-top">
+          <div class="pdf-loaded-icon">📗</div>
+          <div class="pdf-loaded-info">
+            <div class="pdf-loaded-name" id="pdf-name">—</div>
+            <div class="pdf-loaded-meta" id="pdf-meta">Loading...</div>
+          </div>
+          <div class="pdf-change-btn">
+            <input type="file" id="pdf-change-inp" accept="application/pdf">
+            🔄 Change
+          </div>
+        </div>
+        <!-- Progress bar (visible during load) -->
+        <div class="pdf-prog" id="pdf-prog" style="display:none;">
+          <div class="pdf-prog-row">
+            <span id="prog-lbl">PDF load ho raha hai...</span>
+            <span id="prog-pct">0%</span>
+          </div>
+          <div class="pdf-prog-bar"><div class="pdf-prog-fill" id="prog-fill"></div></div>
+        </div>
+      </div>
+
+      <!-- DIVIDER -->
+      <div class="step-divider">STEP 2 — CHART UPLOAD</div>
+
+      <!-- ══ STEP 2: CHART ══ -->
+      <div class="chart-upload-box" id="chart-box">
+        <input type="file" id="chart-inp" accept="image/*" disabled>
+        <div class="cub-icon">📊</div>
+        <div class="cub-title" id="cub-title">Pehle PDF Upload Karo ↑</div>
+        <div class="cub-sub" id="cub-sub">PDF upload hone ke baad chart select kar sakte ho</div>
+        <div class="fmts" style="opacity:.4;">
+          <span class="ft">PNG</span><span class="ft">JPG</span><span class="ft">WEBP</span><span class="ft">Screenshot</span>
+        </div>
+      </div>
+
+      <!-- Chart Preview -->
+      <div id="prev-wrap">
+        <img id="prev-img" src="" alt="">
+        <button class="rm-btn" id="rm-btn">✕</button>
+      </div>
+
+      <!-- DIVIDER -->
+      <div class="step-divider">STEP 3 — ANALYZE</div>
+
+      <!-- ANALYZE BUTTON -->
+      <button class="abtn" id="abtn" disabled>
+        <span>⚡</span> Chart Analyze Karo
+      </button>
+
+      <!-- LOADING -->
+      <div class="loading" id="loading">
+        <div class="bars"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
+        <div class="load-t">
+          <strong id="load-msg">AI Chart Scan Kar Raha Hai...</strong>
+          <span id="load-sub">Pattern identify ho raha hai, Murphy se match kar raha hai</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="panel" id="right-panel">
+    <div class="empty-st" id="empty-st">
+      <div class="empty-ic">📗</div>
+      <div class="empty-tx">
+        <strong style="color:var(--text);font-size:15px;">Yahan Results Dikhenge</strong><br><br>
+        Pehle dono steps complete karo:
+      </div>
+      <div class="empty-steps">
+        <div class="empty-step"><div class="es-num" id="es1">1</div><span>Murphy PDF upload karo</span></div>
+        <div class="empty-step"><div class="es-num" id="es2">2</div><span>Trading chart screenshot upload karo</span></div>
+        <div class="empty-step"><div class="es-num" id="es3">3</div><span>Analyze Karo button dabao</span></div>
+      </div>
+    </div>
+
+    <div id="result-sec" style="display:none;flex-direction:column;height:100%;">
+      <div class="res-top">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="res-dot"></div>
+          <div class="res-lbl">ANALYSIS READY</div>
+        </div>
+        <div class="res-sym" id="res-sym"></div>
+      </div>
+      <div class="res-body" id="res-body"></div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── MURPHY TOC (book page → info) ──
+const MURPHY_TOC={
+  3:{topic:"Philosophy of Technical Analysis",ch:"Ch.1",desc:"Technical analysis ki foundation aur philosophy"},
+  7:{topic:"Flexibility & Adaptability",ch:"Ch.1",desc:"TA different markets aur timeframes pe kaam karta hai"},
+  15:{topic:"Criticisms of Technical Approach",ch:"Ch.1",desc:"TA ke against arguments aur unke jawab"},
+  23:{topic:"Dow Theory — Introduction",ch:"Ch.2",desc:"Dow Theory — market trends ka base"},
+  24:{topic:"Dow Theory — Basic Tenets",ch:"Ch.2",desc:"Dow Theory ke 6 main principles"},
+  30:{topic:"Closing Prices & Lines",ch:"Ch.2",desc:"Closing price ka importance Dow Theory mein"},
+  35:{topic:"Chart Construction",ch:"Ch.3",desc:"Bar charts, line charts kaise construct karte hain"},
+  37:{topic:"Candlestick Charts",ch:"Ch.3",desc:"Candlestick charting — open, high, low, close"},
+  39:{topic:"Arithmetic vs Log Scale",ch:"Ch.3",desc:"Chart scale selection aur uska impact on patterns"},
+  40:{topic:"Daily Bar Chart",ch:"Ch.3",desc:"Daily bar chart construction aur reading"},
+  41:{topic:"Volume on Charts",ch:"Ch.3",desc:"Volume bars — trend confirmation ke liye"},
+  45:{topic:"Weekly & Monthly Charts",ch:"Ch.3",desc:"Long-term analysis ke liye weekly/monthly charts"},
+  49:{topic:"Definition of Trend",ch:"Ch.4",desc:"Trend kya hota hai — uptrend, downtrend, sideways"},
+  51:{topic:"Trend — Three Directions",ch:"Ch.4",desc:"Up, down, sideways — trend ke teen directions"},
+  52:{topic:"Trend Classifications",ch:"Ch.4",desc:"Major, intermediate, minor trend classification"},
+  55:{topic:"Support and Resistance",ch:"Ch.4",desc:"S&R levels — trading ka sabse important concept"},
+  65:{topic:"Trendlines",ch:"Ch.4",desc:"Trendline drawing rules aur trading use"},
+  74:{topic:"Fan Principle",ch:"Ch.4",desc:"Fan lines — trend reversal confirm karne ke liye"},
+  80:{topic:"Channel Lines",ch:"Ch.4",desc:"Price channels — upper aur lower channel trading"},
+  85:{topic:"Percentage Retracements",ch:"Ch.4",desc:"33%, 50%, 66% retracement — pullback levels"},
+  90:{topic:"Price Gaps",ch:"Ch.4",desc:"Common, breakaway, runaway, exhaustion gaps"},
+  94:{topic:"Gap Analysis",ch:"Ch.4",desc:"Gaps ka detailed trading implications"},
+  99:{topic:"Major Reversal Patterns — Intro",ch:"Ch.5",desc:"Price patterns — reversal vs continuation"},
+  103:{topic:"Head and Shoulders Pattern",ch:"Ch.5",desc:"H&S — sabse reliable reversal pattern"},
+  107:{topic:"H&S — Volume Importance",ch:"Ch.5",desc:"H&S mein volume confirmation kaisa hona chahiye"},
+  108:{topic:"H&S — Price Objective",ch:"Ch.5",desc:"H&S se price target kaise calculate karte hain"},
+  110:{topic:"Inverse Head & Shoulders",ch:"Ch.5",desc:"Bullish reversal — Inverse H&S complete guide"},
+  113:{topic:"Complex Head & Shoulders",ch:"Ch.5",desc:"Multiple shoulders wala complex H&S"},
+  115:{topic:"Triple Tops and Bottoms",ch:"Ch.5",desc:"Triple top aur triple bottom reversal patterns"},
+  117:{topic:"Double Tops and Bottoms",ch:"Ch.5",desc:"Double Top (M) aur Double Bottom (W) patterns"},
+  121:{topic:"Variations from Ideal Pattern",ch:"Ch.5",desc:"Real charts mein patterns alag kaise dikhte hain"},
+  125:{topic:"Saucers and Spikes",ch:"Ch.5",desc:"Rounding top/bottom aur V-shaped reversals"},
+  129:{topic:"Continuation Patterns — Intro",ch:"Ch.6",desc:"Continuation patterns kya hote hain aur kaise trade karte hain"},
+  130:{topic:"Triangles",ch:"Ch.6",desc:"Triangle patterns — sab types ka overview"},
+  132:{topic:"Symmetrical Triangle",ch:"Ch.6",desc:"Symmetrical triangle — coiling before breakout"},
+  136:{topic:"Ascending Triangle",ch:"Ch.6",desc:"Ascending triangle — bullish continuation"},
+  138:{topic:"Descending Triangle",ch:"Ch.6",desc:"Descending triangle — bearish continuation"},
+  140:{topic:"Broadening Formation",ch:"Ch.6",desc:"Megaphone pattern — expanding volatility"},
+  141:{topic:"Flags and Pennants",ch:"Ch.6",desc:"Flag aur pennant — short-term continuation patterns"},
+  146:{topic:"Wedge Formation",ch:"Ch.6",desc:"Rising wedge (bearish) aur falling wedge (bullish)"},
+  147:{topic:"Rectangle Formation",ch:"Ch.6",desc:"Rectangle — trading range consolidation pattern"},
+  151:{topic:"The Measured Move",ch:"Ch.6",desc:"Price target measurement technique"},
+  157:{topic:"Volume and Open Interest",ch:"Ch.7",desc:"Volume aur OI — trend confirmation tools"},
+  162:{topic:"Volume Interpretation",ch:"Ch.7",desc:"Volume trends ko kaise padhe aur interpret kare"},
+  169:{topic:"Open Interest in Futures",ch:"Ch.7",desc:"Futures mein open interest analysis"},
+  174:{topic:"Volume & OI Rules Summary",ch:"Ch.7",desc:"Volume aur OI ke sab rules ek jagah"},
+  181:{topic:"Long Term Charts",ch:"Ch.8",desc:"Weekly aur monthly charts ka long-term importance"},
+  185:{topic:"Patterns on Long Term Charts",ch:"Ch.8",desc:"Long-term reversal patterns on weekly charts"},
+  195:{topic:"Moving Averages — Intro",ch:"Ch.9",desc:"Moving averages kya hain aur kaise kaam karte hain"},
+  197:{topic:"MA — Smoothing Device",ch:"Ch.9",desc:"MA as trend smoother with time lag explanation"},
+  207:{topic:"Moving Average Envelopes",ch:"Ch.9",desc:"MA envelopes — price channel around MA"},
+  209:{topic:"Bollinger Bands",ch:"Ch.9",desc:"Bollinger Bands — volatility aur price targets"},
+  210:{topic:"Bollinger Bands as Targets",ch:"Ch.9",desc:"BB bands se entry/exit targets kaise set kare"},
+  212:{topic:"MA and Cycles",ch:"Ch.9",desc:"MA periods ko market cycles se kaise link kare"},
+  215:{topic:"The Weekly Rule",ch:"Ch.9",desc:"4-week rule — simple mechanical trading system"},
+  225:{topic:"Oscillators — Introduction",ch:"Ch.10",desc:"Oscillators ka overview aur use cases"},
+  226:{topic:"Oscillator with Trend",ch:"Ch.10",desc:"Oscillators ko trend ke saath combine karna"},
+  228:{topic:"Measuring Momentum",ch:"Ch.10",desc:"Price momentum kaise calculate aur interpret kare"},
+  234:{topic:"Rate of Change (ROC)",ch:"Ch.10",desc:"ROC — momentum ka percentage measurement"},
+  237:{topic:"Commodity Channel Index (CCI)",ch:"Ch.10",desc:"CCI indicator — overbought/oversold"},
+  239:{topic:"RSI — Relative Strength Index",ch:"Ch.10",desc:"RSI complete guide — 14-period, 70/30 levels"},
+  245:{topic:"RSI — Signal Lines (70/30)",ch:"Ch.10",desc:"RSI se overbought aur oversold signals"},
+  246:{topic:"Stochastics (K%D)",ch:"Ch.10",desc:"Stochastic oscillator — %K aur %D trading"},
+  249:{topic:"Larry Williams %R",ch:"Ch.10",desc:"Williams %R — overbought/oversold oscillator"},
+  252:{topic:"MACD",ch:"Ch.10",desc:"MACD — signal line crossovers aur divergence"},
+  255:{topic:"MACD Histogram",ch:"Ch.10",desc:"MACD histogram — momentum changes visualize karo"},
+  265:{topic:"Point and Figure Charting",ch:"Ch.11",desc:"P&F charts — X aur O columns, noise filter"},
+  297:{topic:"Japanese Candlesticks — Intro",ch:"Ch.12",desc:"Candlestick history aur Western TA se comparison"},
+  299:{topic:"Basic Candlesticks",ch:"Ch.12",desc:"Doji, Hammer, Marubozu — basic candle patterns"},
+  301:{topic:"Candle Pattern Analysis",ch:"Ch.12",desc:"Multi-candle patterns — Engulfing, Morning Star, etc."},
+  306:{topic:"Filtered Candle Patterns",ch:"Ch.12",desc:"Pattern filtering for higher reliability"},
+  309:{topic:"All Candle Patterns Reference",ch:"Ch.12",desc:"Visual reference guide — sab candlestick patterns"},
+  319:{topic:"Elliott Wave Theory",ch:"Ch.13",desc:"5 impulse + 3 corrective waves ka complete guide"},
+  320:{topic:"Elliott Wave — Basic Tenets",ch:"Ch.13",desc:"Wave counting rules aur guidelines"},
+  347:{topic:"Time Cycles",ch:"Ch.14",desc:"Market cycles — seasonal, annual, 4-year cycles"},
+  401:{topic:"Money Management & Risk",ch:"Ch.16",desc:"Position sizing, stop losses, risk management"},
+  421:{topic:"Trading Tactics",ch:"Ch.17",desc:"Entry/exit tactics aur trade management"},
+  451:{topic:"Putting It All Together",ch:"Ch.18",desc:"Sab indicators combine karke trading kaise kare"},
+};
+
+const PAGE_OFFSET=37; // PDF page = book page + 37
+
+// STATE
+let chartFile=null,chartB64=null,chartMime=null;
+let murphyPdfDoc=null;
+let pdfReady=false,chartReady=false;
+
+// ── TICKER ──
+const TICKERS=[
+  {n:'NIFTY',v:'24,320',c:'+0.42%',u:true},{n:'SENSEX',v:'80,145',c:'-0.11%',u:false},
+  {n:'BANKNIFTY',v:'52,430',c:'+0.78%',u:true},{n:'RELIANCE',v:'2,841',c:'+1.20%',u:true},
+  {n:'TCS',v:'3,940',c:'-0.35%',u:false},{n:'INFY',v:'1,640',c:'+0.55%',u:true},
+  {n:'HDFC',v:'1,720',c:'-0.22%',u:false},{n:'ICICIBANK',v:'1,180',c:'+0.91%',u:true},
+  {n:'WIPRO',v:'481',c:'+0.33%',u:true},{n:'HCLTECH',v:'1,621',c:'-0.15%',u:false},
+];
+document.getElementById('ticker').innerHTML=[...TICKERS,...TICKERS].map(t=>
+  `<span class="ti"><span class="ti-n">${t.n}</span><span class="ti-v">${t.v}</span><span class="${t.u?'up':'dn'}">${t.c}</span></span>`
+).join('');
+
+// ── PDF LOAD FUNCTION ──
+async function loadPdf(file){
+  // Show loaded card
+  document.getElementById('pdf-upload-box').style.display='none';
+  document.getElementById('pdf-loaded').style.display='block';
+  document.getElementById('pdf-name').textContent=file.name;
+  document.getElementById('pdf-meta').textContent='Loading...';
+  document.getElementById('pdf-prog').style.display='block';
+  setProgress(5,'PDF read ho raha hai...');
+
+  try{
+    const ab=await file.arrayBuffer();
+    setProgress(40,'PDF parse ho raha hai...');
+    murphyPdfDoc=await pdfjsLib.getDocument({data:ab}).promise;
+    setProgress(100,'✓ Ready!');
+    setTimeout(()=>{document.getElementById('pdf-prog').style.display='none';},800);
+
+    const total=murphyPdfDoc.numPages;
+    document.getElementById('pdf-meta').textContent=`✓ ${total} pages loaded • Ready for analysis`;
+    pdfReady=true;
+
+    // Enable chart upload
+    enableChartUpload();
+    updateSteps();
+    checkReady();
+  }catch(e){
+    document.getElementById('pdf-meta').textContent='⚠️ Error: '+e.message;
+    document.getElementById('pdf-prog').style.display='none';
+  }
+}
+
+// PDF input handlers
+document.getElementById('pdf-inp').addEventListener('change',function(){if(this.files[0])loadPdf(this.files[0]);});
+document.getElementById('pdf-change-inp').addEventListener('change',function(){if(this.files[0])loadPdf(this.files[0]);});
+
+function setProgress(pct,label){
+  document.getElementById('prog-fill').style.width=pct+'%';
+  document.getElementById('prog-lbl').textContent=label;
+  document.getElementById('prog-pct').textContent=pct+'%';
+}
+
+// ── ENABLE CHART UPLOAD ──
+function enableChartUpload(){
+  const cb=document.getElementById('chart-box');
+  cb.classList.add('ready');
+  document.getElementById('chart-inp').disabled=false;
+  document.getElementById('cub-title').textContent='Chart Screenshot Yahan Drop Karo';
+  document.getElementById('cub-sub').textContent='TradingView, Zerodha, Groww, Upstox — koi bhi app';
+}
+
+// ── CHART UPLOAD ──
+const chartBox=document.getElementById('chart-box');
+const chartInp=document.getElementById('chart-inp');
+
+chartBox.addEventListener('dragover',e=>{
+  e.preventDefault();
+  if(pdfReady)chartBox.style.borderColor='var(--accent)';
+});
+chartBox.addEventListener('dragleave',()=>{chartBox.style.borderColor='';});
+chartBox.addEventListener('drop',e=>{
+  e.preventDefault();chartBox.style.borderColor='';
+  if(!pdfReady)return;
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type.startsWith('image/'))loadChart(f);
+});
+chartInp.addEventListener('change',()=>{if(chartInp.files[0])loadChart(chartInp.files[0]);});
+
+function loadChart(f){
+  chartFile=f;chartMime=f.type||'image/png';
+  const r=new FileReader();
+  r.onload=e=>{
+    chartB64=e.target.result.split(',')[1];
+    document.getElementById('prev-img').src=e.target.result;
+    document.getElementById('prev-wrap').style.display='block';
+    chartBox.style.display='none';
+    chartReady=true;
+    updateSteps();checkReady();
+  };
+  r.readAsDataURL(f);
+}
+
+document.getElementById('rm-btn').addEventListener('click',()=>{
+  chartFile=null;chartB64=null;chartReady=false;
+  document.getElementById('prev-wrap').style.display='none';
+  chartBox.style.display='block';
+  chartInp.value='';
+  updateSteps();checkReady();
+});
+
+// ── UPDATE STEPS UI ──
+function updateSteps(){
+  // Step circles
+  const sc1=document.getElementById('sc1'),sl1=document.getElementById('sl1');
+  const sc2=document.getElementById('sc2'),sl2=document.getElementById('sl2');
+  const sc3=document.getElementById('sc3'),sl3=document.getElementById('sl3');
+  
+  
+  if(pdfReady){
+    sc1.className='step-circle done';sc1.textContent='✓';
+    sl1.className='step-label done';
+    document.getElementById('sline1').className='step-line done';
+    document.getElementById('es1').style.background='var(--accent)';
+    document.getElementById('es1').style.color='#000';
+    document.getElementById('es1').textContent='✓';
+  }
+  if(chartReady){
+    sc2.className='step-circle done';sc2.textContent='✓';
+    sl2.className='step-label done';
+    document.getElementById('sline2').className='step-line done';
+    document.getElementById('es2').style.background='var(--accent)';
+    document.getElementById('es2').style.color='#000';
+    document.getElementById('es2').textContent='✓';
+    sc3.className='step-circle active';
+    sl3.className='step-label active';
+  } else if(pdfReady){
+    sc2.className='step-circle active';
+    sl2.className='step-label active';
+  }
+}
+
+function checkReady(){
+  document.getElementById('abtn').disabled=!(pdfReady&&chartReady);
+}
+
+// ── ANALYZE ──
+document.getElementById('abtn').addEventListener('click',analyze);
+
+async function analyze(){
+  showLoad(true,'AI Chart Scan Kar Raha Hai...','Pattern identify ho raha hai, Murphy se match kar raha hai');
+  hideResult();
+
+  const murphyContext=`John J. Murphy - "Technical Analysis of the Financial Markets" (596 pages):
+Ch.1: Philosophy of TA (p.3)
+Ch.2: Dow Theory (p.23) — Basic Tenets p.24
+Ch.3: Chart Construction (p.35) — Candlesticks p.37, Volume p.41
+Ch.4: Basic Concepts of Trend (p.49) — Support/Resistance p.55, Trendlines p.65, Channel p.80, Retracements p.85, Gaps p.90
+Ch.5: Major Reversal Patterns (p.99) — Head&Shoulders p.103, Inverse H&S p.110, Triple Top/Bottom p.115, Double Top/Bottom p.117, Saucers/Spikes p.125
+Ch.6: Continuation Patterns (p.129) — Triangles p.130, Symmetrical p.132, Ascending p.136, Descending p.138, Broadening p.140, Flags/Pennants p.141, Wedge p.146, Rectangle p.147
+Ch.7: Volume and Open Interest (p.157)
+Ch.8: Long Term Charts (p.181)
+Ch.9: Moving Averages (p.195) — Envelopes p.207, Bollinger Bands p.209
+Ch.10: Oscillators (p.225) — Momentum p.228, ROC p.234, RSI p.239, Stochastics p.246, MACD p.252, MACD Histogram p.255
+Ch.11: Point & Figure (p.265)
+Ch.12: Japanese Candlesticks (p.297) — Basic Candles p.299, Candle Patterns p.301, All Patterns Reference p.309
+Ch.13: Elliott Wave (p.319)
+Ch.14: Time Cycles (p.347)
+Ch.16: Money Management (p.401)
+Ch.17: Trading Tactics (p.421)`;
+
+  const systemPrompt=`You are an expert technical analyst trained on John J. Murphy's "Technical Analysis of the Financial Markets".
+
+Analyze the uploaded trading chart image very carefully. Look for ALL visible patterns, indicator readings, trend structures, candlestick formations, support/resistance levels, volume patterns, etc.
+
+Book chapter reference:
+${murphyContext}
+
+Respond ONLY with valid JSON (absolutely no markdown, no backticks, no text outside JSON):
+{
+  "symbol": "detected symbol or 'Unknown'",
+  "timeframe": "detected timeframe e.g. 15min, 1hr, Daily, Weekly",
+  "trend": "BULLISH or BEARISH or SIDEWAYS",
+  "overallSentiment": "1 line market feel in Hinglish",
+  "patternsDetected": [
+    {"name":"pattern name in English","type":"bullish/bearish/neutral","confidence":"HIGH/MEDIUM/LOW","description":"is pattern ka matlab 1 line mein"}
+  ],
+  "keyLevels": {
+    "support": "price or area description",
+    "resistance": "price or area description"
+  },
+  "indicators": [
+    {"name":"indicator name","observation":"kya dikh raha hai chart mein"}
+  ],
+  "signal": "BUY or SELL or WAIT",
+  "signalReason": "signal reason 1 line Hinglish mein",
+  "summaryHindi": "2-3 sentences analysis in simple Hinglish",
+  "murphyPageMatches": [
+    {
+      "bookPage": 103,
+      "patternName": "Head and Shoulders",
+      "relevance": "HIGH",
+      "whyThisPage": "Is page pe exactly yahi pattern explain hai jo chart mein dikh raha hai",
+      "keyLearning": "Is page se kya seekhoge — 1 line mein"
+    }
+  ]
+}
+
+IMPORTANT:
+- murphyPageMatches mein SIRF woh pages daalo jo chart mein actually dikh rahe patterns se genuinely match karte hain
+- Maximum 5 page matches
+- Book page numbers exactly upar diye gaye chapter reference se use karo
+- Har match genuinely chart ke kisi visible element se related hona chahiye`;
+
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:1000,
+        system:systemPrompt,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:chartMime,data:chartB64}},
+          {type:'text',text:'Is trading chart ko analyze karo. Sab visible patterns, indicators, aur trend structures identify karo. Murphy ki book ke exact pages match karo. JSON only return karo.'}
+        ]}]
+      })
+    });
+    const data=await resp.json();
+    if(data.error)throw new Error(data.error.message);
+    const raw=data.content?.map(b=>b.text||'').join('');
+    const clean=raw.replace(/```json|```/g,'').trim();
+    const result=JSON.parse(clean);
+    showLoad(false);
+    renderResult(result);
+  }catch(err){
+    showLoad(false);
+    renderError(err.message);
+  }
+}
+
+// ── RENDER RESULT ──
+function renderResult(r){
+  const trendCls=r.trend==='BULLISH'?'up':r.trend==='BEARISH'?'dn':'';
+  const sigEmoji=r.signal==='BUY'?'🟢':r.signal==='SELL'?'🔴':'🟡';
+  const sigCls=r.signal==='BUY'?'up':r.signal==='SELL'?'dn':'';
+  document.getElementById('res-sym').textContent=(r.symbol||'?')+' • '+(r.timeframe||'');
+
+  let html=`
+  <div class="ablock">
+    <div class="ablock-title">📊 Chart Overview</div>
+    <div class="ablock-body">
+      Trend: <strong class="${trendCls}">${r.trend}</strong> &nbsp;·&nbsp;
+      Signal: <strong class="${sigCls}">${sigEmoji} ${r.signal}</strong><br>
+      <span style="color:var(--muted2);font-size:12px;margin-top:3px;display:block;">${r.overallSentiment||''}</span>
+    </div>
+  </div>`;
+
+  if(r.patternsDetected?.length){
+    html+=`<div class="ablock info"><div class="ablock-title">🕯️ Patterns Detected</div><div class="ablock-body">`;
+    r.patternsDetected.forEach(p=>{
+      const cls=p.type==='bullish'?'bull':p.type==='bearish'?'bear':'neut';
+      html+=`<span class="tag ${cls}">${p.name} · ${p.confidence}</span>`;
+    });
+    if(r.patternsDetected[0]?.description){
+      html+=`<div style="margin-top:7px;font-size:12px;color:var(--muted2);">${r.patternsDetected[0].description}</div>`;
+    }
+    html+=`</div></div>`;
+  }
+
+  if(r.keyLevels){
+    html+=`<div class="ablock gold"><div class="ablock-title">📐 Key Levels</div>
+    <div class="ablock-body">Support: <strong class="up">${r.keyLevels.support}</strong> &nbsp;|&nbsp; Resistance: <strong class="dn">${r.keyLevels.resistance}</strong></div></div>`;
+  }
+
+  if(r.indicators?.length){
+    html+=`<div class="ablock warn"><div class="ablock-title">📈 Indicators</div><div class="ablock-body">`;
+    r.indicators.forEach(i=>{html+=`• <strong>${i.name}</strong>: ${i.observation}<br>`;});
+    html+=`</div></div>`;
+  }
+
+  html+=`<div class="ablock"><div class="ablock-title">💬 Analysis (Hinglish)</div>
+    <div class="ablock-body" style="font-size:13px;line-height:1.75;">${r.summaryHindi}</div></div>`;
+
+  if(r.signalReason){
+    html+=`<div class="ablock ${r.signal==='BUY'?'':'warn'}"><div class="ablock-title">🎯 Signal</div>
+      <div class="ablock-body">${r.signalReason}</div></div>`;
+  }
+
+  // MURPHY PAGES
+  if(r.murphyPageMatches?.length){
+    html+=`<div class="pms-wrap"><div class="pms-title">📗 Murphy Ki Book — Yeh Pages Padho</div>`;
+    r.murphyPageMatches.forEach((m,i)=>{
+      const bp=m.bookPage;
+      const toc=MURPHY_TOC[bp]||{topic:m.patternName,ch:'Murphy',desc:m.whyThisPage};
+      const sk=(m.relevance||'M').charAt(0).toUpperCase();
+      html+=`<div class="page-card">
+        <div class="pch" onclick="togglePg(${i},${bp})">
+          <div class="pg-num">P<br>${bp}</div>
+          <div class="pg-info">
+            <div class="pg-topic">${toc.topic}</div>
+            <div class="pg-reason">${m.whyThisPage}</div>
+            <div class="pg-learn">💡 ${m.keyLearning||toc.desc}</div>
+          </div>
+          <div class="pg-badge">
+            <span class="pg-score ${sk}">${m.relevance}</span>
+            <span class="pg-ch">${toc.ch}</span>
+            <button class="pg-arr" id="earr-${i}">▼</button>
+          </div>
+        </div>
+        <div class="page-preview" id="pp-${i}">
+          <div id="ppi-${i}"><div class="no-prev">📖 Loading page preview...</div></div>
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  document.getElementById('res-body').innerHTML=html;
+  document.getElementById('empty-st').style.display='none';
+  document.getElementById('result-sec').style.display='flex';
+
+  // Update step 3
+  document.getElementById('es3').style.background='var(--accent)';
+  document.getElementById('es3').style.color='#000';
+  document.getElementById('es3').textContent='✓';
+  document.getElementById('sc3').className='step-circle done';
+  document.getElementById('sc3').textContent='✓';
+  document.getElementById('sl3').className='step-label done';
+}
+
+// ── TOGGLE PAGE PREVIEW ──
+const openPgs={};
+async function togglePg(idx,bookPage){
+  const pp=document.getElementById(`pp-${idx}`);
+  const arr=document.getElementById(`earr-${idx}`);
+  if(openPgs[idx]){
+    pp.classList.remove('show');arr.classList.remove('open');
+    openPgs[idx]=false;return;
+  }
+  pp.classList.add('show');arr.classList.add('open');
+  openPgs[idx]=true;
+  const inner=document.getElementById(`ppi-${idx}`);
+  if(inner.dataset.loaded)return;
+  inner.dataset.loaded='1';
+
+  const pdfPage=bookPage+PAGE_OFFSET;
+
+  if(!murphyPdfDoc){
+    inner.innerHTML=`<div class="no-prev">PDF load nahi hai</div>`;return;
+  }
+  if(pdfPage<1||pdfPage>murphyPdfDoc.numPages){
+    inner.innerHTML=`<div class="no-prev">Page ${pdfPage} PDF mein available nahi hai</div>`;return;
+  }
+
+  try{
+    inner.innerHTML=`<div class="no-prev" style="color:var(--accent2);">⏳ Page render ho raha hai...</div>`;
+    const pg=await murphyPdfDoc.getPage(pdfPage);
+    const vp=pg.getViewport({scale:1.5});
+    const canvas=document.createElement('canvas');
+    const ctx=canvas.getContext('2d');
+    canvas.width=vp.width;canvas.height=vp.height;
+    await pg.render({canvasContext:ctx,viewport:vp}).promise;
+    const wrap=document.createElement('div');wrap.className='pcw';
+    wrap.appendChild(canvas);
+    const lbl=document.createElement('div');lbl.className='pbook-lbl';
+    lbl.textContent=`📗 Book Page ${bookPage}  •  PDF Page ${pdfPage}`;
+    inner.innerHTML='';
+    inner.appendChild(wrap);
+    inner.appendChild(lbl);
+  }catch(e){
+    inner.innerHTML=`<div class="no-prev">Preview error: ${e.message}</div>`;
+  }
+}
+
+function renderError(msg){
+  document.getElementById('res-body').innerHTML=`<div class="ablock warn">
+    <div class="ablock-title">⚠️ Error</div>
+    <div class="ablock-body">Kuch problem aayi:<br><span style="font-size:11px;color:var(--muted2);">${msg}</span><br><br>
+    Check karo: Internet connection theek hai? Chart sahi se upload hua?
+    </div></div>`;
+  document.getElementById('empty-st').style.display='none';
+  document.getElementById('result-sec').style.display='flex';
+}
+function showLoad(show,t,s){
+  document.getElementById('loading').style.display=show?'block':'none';
+  document.getElementById('abtn').disabled=show;
+  if(t)document.getElementById('load-msg').textContent=t;
+  if(s)document.getElementById('load-sub').textContent=s;
+}
+function hideResult(){
+  document.getElementById('result-sec').style.display='none';
+  document.getElementById('empty-st').style.display='flex';
+}
+</script>
+</body>
+</html>
